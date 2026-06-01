@@ -69,9 +69,20 @@ function ReportSheet({ rows, filtros }) {
 }
 
 function QrPoster() {
-  // El QR apunta a la propia página del formulario (en producción: la URL del site en GitHub).
+  // El QR apunta a la propia página del formulario (la URL pública del site).
   const url = window.location.href.split("#")[0] + "#escanear";
-  const qrSrc = "https://api.qrserver.com/v1/create-qr-code/?size=900x900&margin=0&qzone=1&data=" + encodeURIComponent(url);
+  const dataUrl = React.useMemo(() => {
+    try {
+      if (window.qrcode) {
+        const qr = window.qrcode(0, "M"); // versión auto, corrección de errores media
+        qr.addData(url);
+        qr.make();
+        return qr.createDataURL(8, 0);
+      }
+    } catch (e) { console.warn("QR:", e); }
+    return null;
+  }, [url]);
+
   return (
     <div className="print-root poster">
       <div className="poster-inner">
@@ -79,11 +90,9 @@ function QrPoster() {
         <h1>Retiro y entrega de llaves</h1>
         <p className="poster-lead">Escaneá este código con la cámara de tu celular para registrar el retiro o la entrega de la llave de un departamento.</p>
         <div className="poster-qr">
-          <img src={qrSrc} alt="Código QR" onError={(e) => { e.target.style.display = "none"; e.target.nextSibling.style.display = "grid"; }} />
-          <div className="qr-fallback" style={{ display: "none" }}>
-            <Icon.qr style={{ width: 120, height: 120 }} />
-            <span>El código QR se mostrará aquí</span>
-          </div>
+          {dataUrl
+            ? <img src={dataUrl} alt="Código QR" />
+            : <div className="qr-fallback" style={{ display: "grid" }}><Icon.qr style={{ width: 120, height: 120 }} /><span>Generando código…</span></div>}
         </div>
         <ol className="poster-steps">
           <li><b>1.</b> Abrí la cámara y apuntá al código</li>

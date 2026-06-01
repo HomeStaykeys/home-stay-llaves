@@ -3,7 +3,7 @@
    ============================================================ */
 const { useState: useStateS, useEffect: useEffectS, useMemo } = React;
 
-const SITE_PIN = "2024"; // demo
+const SITE_PIN = "2026"; // PIN de acceso al registro (cambialo acá cuando quieras)
 
 function useRows() {
   const [rows, setRows] = useStateS(KeyDB.all());
@@ -56,7 +56,6 @@ function PinLock({ onOk }) {
         />
         {err && <div className="lock-err">PIN incorrecto. Probá de nuevo.</div>}
         <button className="btn btn-primary btn-block btn-lg" type="submit">Entrar</button>
-        <div className="lock-demo">Demo · PIN <b className="mono">2024</b></div>
       </form>
     </div>
   );
