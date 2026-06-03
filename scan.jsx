@@ -82,7 +82,10 @@ function ScanHome({ onPick }) {
 function RetiroForm({ onCancel, onDone }) {
   const [f, setF] = useState({ persona: "", empresa: "", dpto: "", nivel: "", documento: "" });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const ok = f.persona.trim() && f.documento.trim() && f.empresa.trim() && f.dpto.trim();
+  const ok = f.persona.trim() && f.documento.trim() && f.empresa.trim() && f.dpto.trim() && f.nivel.trim();
+
+  const NIVELES = Array.from({ length: 21 }, (_, i) => String(i + 1));
+  const DEPTOS = ["A", "B", "C", "D", "E", "F", "G"];
 
   function submit() {
     if (!ok) return;
@@ -104,11 +107,17 @@ function RetiroForm({ onCancel, onDone }) {
           <input className="input" value={f.empresa} onChange={set("empresa")} placeholder="Ej. Pinturas del Valle" />
         </Field>
         <div className="form-row">
-          <Field label="N.º de departamento">
-            <input className="input mono" value={f.dpto} onChange={set("dpto")} placeholder="301" />
-          </Field>
           <Field label="Nivel / piso">
-            <input className="input mono" value={f.nivel} onChange={set("nivel")} placeholder="3" />
+            <select className="select" value={f.nivel} onChange={set("nivel")}>
+              <option value="">Elegir…</option>
+              {NIVELES.map((n) => <option key={n} value={n}>Nivel {n}</option>)}
+            </select>
+          </Field>
+          <Field label="Departamento">
+            <select className="select" value={f.dpto} onChange={set("dpto")} disabled={!f.nivel}>
+              <option value="">{f.nivel ? "Elegir…" : "Elegí nivel"}</option>
+              {DEPTOS.map((d) => <option key={d} value={d}>Depto {d}</option>)}
+            </select>
           </Field>
         </div>
         <div className="auto-note">
