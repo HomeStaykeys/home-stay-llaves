@@ -52,11 +52,11 @@
     const now = Date.now();
     const d = (days, h = 0) => new Date(now - days * 864e5 - h * 36e5).toISOString();
     return [
-      { id: "r1", dpto: "301", nivel: "3", empresa: "Electro Andina", documento: "28.456.789", persona: "Martín Quispe", retiroAt: d(6, 2), estado: "cerrado", entregaAt: d(4, 1), entregaPersona: "Martín Quispe", observaciones: "Se finalizó el tendido eléctrico del estar. Sin novedades.", dias: 2 },
-      { id: "r2", dpto: "502", nivel: "5", empresa: "Pinturas del Valle", documento: "33.120.654", persona: "Lucía Romero", retiroAt: d(2, 5), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
-      { id: "r3", dpto: "104", nivel: "1", empresa: "Aberturas Sur", documento: "30.987.123", persona: "Diego Funes", retiroAt: d(1, 3), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
-      { id: "r4", dpto: "208", nivel: "2", empresa: "Electro Andina", documento: "28.456.789", persona: "Martín Quispe", retiroAt: d(11, 0), estado: "cerrado", entregaAt: d(8, 4), entregaPersona: "Carla Vega", observaciones: "Faltaba una tapa de toma en cocina, se reportó al capataz.", dias: 3 },
-      { id: "r5", dpto: "Cochera B-12", nivel: "Subsuelo", empresa: "Hidromax Sanitarios", documento: "26.741.300", persona: "Pablo Ledesma", retiroAt: d(0, 6), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
+      { id: "r1", dpto: "301", nivel: "3", empresa: "Electro Andina", documento: "28.456.789", celular: "+595 981 234 567", persona: "Martín Quispe", retiroAt: d(6, 2), estado: "cerrado", entregaAt: d(4, 1), entregaPersona: "Martín Quispe", observaciones: "Se finalizó el tendido eléctrico del estar. Sin novedades.", dias: 2 },
+      { id: "r2", dpto: "502", nivel: "5", empresa: "Pinturas del Valle", documento: "33.120.654", celular: "+595 971 112 334", persona: "Lucía Romero", retiroAt: d(2, 5), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
+      { id: "r3", dpto: "104", nivel: "1", empresa: "Aberturas Sur", documento: "30.987.123", celular: "+595 985 776 210", persona: "Diego Funes", retiroAt: d(1, 3), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
+      { id: "r4", dpto: "208", nivel: "2", empresa: "Electro Andina", documento: "28.456.789", celular: "+595 981 234 567", persona: "Martín Quispe", retiroAt: d(11, 0), estado: "cerrado", entregaAt: d(8, 4), entregaPersona: "Carla Vega", observaciones: "Faltaba una tapa de toma en cocina, se reportó al capataz.", dias: 3 },
+      { id: "r5", dpto: "Cochera B-12", nivel: "Subsuelo", empresa: "Hidromax Sanitarios", documento: "26.741.300", celular: "+595 992 050 418", persona: "Pablo Ledesma", retiroAt: d(0, 6), estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null },
     ];
   }
 
@@ -124,11 +124,35 @@
       return this.abiertos().filter((r) => (dpto ? n(r.dpto) === n(dpto) : true) && (empresa ? n(r.empresa) === n(empresa) : true));
     },
 
-    crearRetiro({ persona, empresa, dpto, nivel, documento }) {
+    /* ¿Hay una llave (nivel+dpto) ya retirada y sin devolver? */
+    abiertaDe({ nivel, dpto } = {}) {
+      const n = (s) => (s || "").trim().toLowerCase();
+      return this.abiertos().find((r) => n(r.nivel) === n(nivel) && n(r.dpto) === n(dpto)) || null;
+    },
+    estaAbierta(sel) { return !!this.abiertaDe(sel); },
+
+    /* Personas conocidas (para autocompletar al volver a retirar) */
+    personas() {
+      const map = new Map();
+      // recorre del más reciente al más antiguo: el primero gana (dato más nuevo)
+      this.all().forEach((r) => {
+        const key = (r.persona || "").trim().toLowerCase();
+        if (!key || map.has(key)) return;
+        map.set(key, { persona: r.persona, documento: r.documento || "", celular: r.celular || "", empresa: r.empresa || "" });
+      });
+      return [...map.values()];
+    },
+
+    crearRetiro({ persona, empresa, dpto, nivel, documento, celular }) {
+      // bloqueo de llaves en uso: no se puede retirar una llave que ya está abierta
+      const enUso = this.abiertaDe({ nivel, dpto });
+      if (enUso) return { error: "en_uso", existente: enUso };
+      const cel = (celular || "").trim();
       const row = {
         id: uid(),
         dpto: (dpto || "").trim(), nivel: (nivel || "").trim(),
         empresa: (empresa || "").trim(), documento: (documento || "").trim(),
+        celular: cel ? "+595 " + cel.replace(/^\+?595\s*/, "") : "",
         persona: (persona || "").trim(),
         retiroAt: new Date().toISOString(),
         estado: "abierto", entregaAt: null, entregaPersona: null, observaciones: null, dias: null,
@@ -149,6 +173,24 @@
       });
       if (updated) {
         if (mode === "firebase") { notify(); colRef.doc(id).set(updated).catch((e) => console.warn("Firestore set:", e)); }
+        else { _saveLocal(cache); }
+      }
+      return updated;
+    },
+
+    /* cerrar varias llaves en un solo paso (misma entrega/observaciones) */
+    cerrarRegistros(ids, { observaciones, entregaPersona } = {}) {
+      const set = new Set(ids || []);
+      const updated = [];
+      const entregaAt = new Date().toISOString();
+      cache = (cache || []).map((r) => {
+        if (!set.has(r.id) || r.estado !== "abierto") return r;
+        const u = { ...r, estado: "cerrado", entregaAt, entregaPersona: (entregaPersona || "").trim() || r.persona, observaciones: (observaciones || "").trim() || null, dias: diffDias(r.retiroAt, entregaAt) };
+        updated.push(u);
+        return u;
+      });
+      if (updated.length) {
+        if (mode === "firebase") { notify(); updated.forEach((u) => colRef.doc(u.id).set(u).catch((e) => console.warn("Firestore set:", e))); }
         else { _saveLocal(cache); }
       }
       return updated;
